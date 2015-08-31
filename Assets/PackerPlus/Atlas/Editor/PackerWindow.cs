@@ -9,6 +9,8 @@ public class PackerWindow : ScriptableWizard
     [SerializeField] private PackerWrapper.ColorDepth depth = PackerWrapper.ColorDepth.TrueColor;
     [Range(128, 4096)] [SerializeField] private int width = 1024;
     [Range(128, 4096)] [SerializeField] private int height = 1024;
+    [SerializeField] private bool crop = true;
+    [SerializeField] private PackerWrapper.Algorithm algorithm;
     [SerializeField] private AtlasPlus atlas;
     [SerializeField] private Texture2D[] textures;
 
@@ -20,7 +22,8 @@ public class PackerWindow : ScriptableWizard
 
     private void OnWizardCreate()
     {
-        PackerWrapper.Pack(textures, atlas, width, height, depth, format);
+        PackerWrapper.Pack(textures, atlas, width, height, depth, format,
+            new PackerWrapper.Options {algorithm = algorithm, crop = crop});
         EditorUtility.SetDirty(atlas);
         AssetDatabase.Refresh();
     }

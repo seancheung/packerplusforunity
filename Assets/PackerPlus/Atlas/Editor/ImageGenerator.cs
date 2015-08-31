@@ -19,7 +19,7 @@ public class ImageGenerator : ScriptableWizard
 
     private void OnWizardCreate()
     {
-        PackerWrapper.CreateImage(width, height, "Assets/" + filename + "." + format, depth, format, color);
+        PackerWrapper.Create(width, height, "Assets/" + filename + "." + format, depth, format, color);
         AssetDatabase.Refresh();
     }
 

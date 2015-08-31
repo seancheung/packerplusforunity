@@ -1,10 +1,19 @@
-﻿#define ENABLE_DEBUG
+﻿#if UNITY_EDITOR
+#define ENABLE_DEBUG
+#endif
 
 using System;
+using System.Collections.Generic;
+using System.ComponentModel;
+using System.IO;
 using System.Linq;
 using System.Runtime.InteropServices;
-using UnityEditor;
+using MiniJSON;
 using UnityEngine;
+#if ENABLE_DEBUG
+using UnityEditor;
+
+#endif
 
 #if !UNITY_5 && ENABLE_DEBUG
 [InitializeOnLoad]
@@ -52,18 +61,42 @@ public static class PackerWrapper
     #endregion
 
     [DllImport(API, EntryPoint = "create_empty")]
-    public static extern void CreateImage([In] int width, [In] int height,
-        [In, MarshalAs(UnmanagedType.LPStr)] string path,
-        ColorDepth depth,
-        Format format, Color color);
+    private static extern void CreateEmpty(int width, int height, [MarshalAs(UnmanagedType.LPWStr)] string path,
+        ColorDepth depth, Format format, Color color);
 
     [DllImport(API, EntryPoint = "pack")]
-    private static extern void Pack([In] IntPtr textures, [In] int count, [In] Size maxSize, [In] string path,
-        [In, Out] IntPtr atlas,
-        [In] ColorDepth depth, [In] Format format);
+    private static extern bool Pack([MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] Texture[] textures,
+        int count, int maxWidth, int maxHeight, [MarshalAs(UnmanagedType.LPWStr)] string path,
+        ColorDepth depth, Format format,
+        [Out, MarshalAs(UnmanagedType.LPStr)] out string json, Options options, DebugOptions debug);
 
-    public static void Pack(Texture2D[] textures, AtlasPlus atlas, int width, int height, ColorDepth depth,
-        Format format)
+    /// <summary>
+    /// Create a texture
+    /// </summary>
+    /// <param name="width"></param>
+    /// <param name="height"></param>
+    /// <param name="path"></param>
+    /// <param name="depth"></param>
+    /// <param name="format"></param>
+    /// <param name="color"></param>
+    public static void Create(int width, int height, string path, ColorDepth depth, Format format, Color32 color)
+    {
+        CreateEmpty(width, height, path, depth, format, color);
+    }
+
+#if UNITY_EDITOR
+    /// <summary>
+    /// Pack textures(Editor only)
+    /// </summary>
+    /// <param name="textures"></param>
+    /// <param name="atlas"></param>
+    /// <param name="maxWidth"></param>
+    /// <param name="maxHeight"></param>
+    /// <param name="depth"></param>
+    /// <param name="format"></param>
+    /// <param name="options"></param>
+    public static void Pack(Texture2D[] textures, AtlasPlus atlas, int maxWidth, int maxHeight, ColorDepth depth,
+        Format format, Options options)
     {
         Texture[] data =
             textures.Select(
@@ -71,190 +104,71 @@ public static class PackerWrapper
                     new Texture
                     {
                         name = t.name,
-                        path = AssetDatabase.GetAssetPath(t),
-                        size = new Size {width = t.width, height = t.height}
+                        path = AssetDatabase.GetAssetPath(t)
                     }).ToArray();
         var count = data.Length;
-        var size = new Size {width = width, height = height};
-        var path = AssetDatabase.GetAssetPath(atlas).Replace(".asset", format.ToString().ToLower());
-        Atlas info = new Atlas();
+        var path = AssetDatabase.GetAssetPath(atlas);
 
-        IntPtr textureIntPtr = ArrayToIntPtr(data);
-        IntPtr atlasPtr = Atlas.MarshalManagedToNative(info);
-        try
-        {
-            Pack(textureIntPtr, count, size, path, atlasPtr, depth, format);
-            info = (Atlas) Atlas.MarshalNativeToManaged(atlasPtr);
-        }
-        finally
-        {
-            Marshal.FreeHGlobal(textureIntPtr);
-            Marshal.FreeHGlobal(atlasPtr);
-        }
+        string json;
+        if (
+            !Pack(data, count, maxWidth, maxHeight, Path.ChangeExtension(path, format.ToString().ToLower()), depth,
+                format, out json, options, DebugOptions.None) || string.IsNullOrEmpty(json))
+            return;
+        File.WriteAllText(Path.ChangeExtension(path, "txt"), json);
+        AssetDatabase.Refresh();
 
-        atlas.maxWidth = info.maxSize.width;
-        atlas.maxHeight = info.maxSize.height;
-        atlas.textures = new TextureInfo[info.textureCount];
-        for (int i = 0; i < info.textureCount; i++)
+        var ja = Json.Deserialize(json) as Dictionary<string, object>;
+        if (ja == null)
+            return;
+        var ta = ja["textures"] as List<object>;
+        var sa = ja["sprites"] as List<object>;
+        if (ta == null || sa == null)
+            return;
+        atlas.textures = new TextureInfo[ta.Count];
+        for (int i = 0; i < ta.Count; i++)
         {
-            atlas.textures[i] = new TextureInfo
-            {
-                width = info.textures[i].size.width,
-                height = info.textures[i].size.height,
-                texture = AssetDatabase.LoadAssetAtPath<Texture2D>(info.textures[i].path)
-            };
+            Dictionary<string, object> t = (Dictionary<string, object>) ta[i];
+            atlas.textures[i] = new TextureInfo();
+            atlas.textures[i].width = (int) (long) t["width"];
+            atlas.textures[i].height = (int) (long) t["height"];
+            atlas.textures[i].texture = AssetDatabase.LoadAssetAtPath<Texture2D>((string) t["path"]);
+            if (atlas.textures[i].texture)
+                atlas.textures[i].texture.name = (string) t["name"];
         }
-        atlas.sprites = new SpriteInfo[info.spriteCount];
-        for (int i = 0; i < info.spriteCount; i++)
+        atlas.sprites = new SpriteInfo[sa.Count];
+        for (int i = 0; i < sa.Count; i++)
         {
-            atlas.sprites[i] = new SpriteInfo
-            {
-                name = info.sprites[i].name,
-                section = info.sprites[i].section,
-                sourceRect = new Rect(0, 0, info.sprites[i].size.width, info.sprites[i].size.height),
-                uvRect =
-                    Rect.MinMaxRect(info.sprites[i].uv.xMin, info.sprites[i].uv.yMin, info.sprites[i].uv.xMax,
-                        info.sprites[i].uv.yMax)
-            };
+            Dictionary<string, object> s = (Dictionary<string, object>) sa[i];
+            atlas.sprites[i] = new SpriteInfo();
+            atlas.sprites[i].name = (string) s["name"];
+            atlas.sprites[i].section = (int) (long) s["section"];
+            var rect = (Dictionary<string, object>) s["rect"];
+            var uv = (Dictionary<string, object>) s["uv"];
+            atlas.sprites[i].sourceRect = Rect.MinMaxRect((int) (long) rect["xMin"], (int) (long) rect["yMin"],
+                (int) (long) rect["xMax"], (int) (long) rect["yMax"]);
+            Converter<object, float> converter =
+                input => (float) TypeDescriptor.GetConverter(input.GetType()).ConvertTo(input, typeof (float));
+            atlas.sprites[i].uvRect = Rect.MinMaxRect(converter(uv["xMin"]), converter(uv["yMin"]),
+                converter(uv["xMax"]), converter(uv["yMax"]));
         }
+        atlas.maxWidth = maxWidth;
+        atlas.maxHeight = maxHeight;
     }
-
-    private static IntPtr ArrayToIntPtr(Array array)
-    {
-        if (array.Length == 0)
-            return IntPtr.Zero;
-        var size = Marshal.SizeOf(array.GetValue(0));
-        IntPtr mem = Marshal.AllocHGlobal(size*array.Length);
-        for (int i = 0; i < array.Length; i++)
-        {
-            Marshal.StructureToPtr(array.GetValue(i), mem, false);
-            mem = new IntPtr((long) mem + size);
-        }
-        return mem;
-    }
+#endif
 
     #region Marshal
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct UVRect
-    {
-        public float xMin;
-        public float yMin;
-        public float xMax;
-        public float yMax;
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct Size
-    {
-        [FieldOffset(0)] public int width;
-        [FieldOffset(0)] public int height;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
     private struct Texture
     {
-        [MarshalAs(UnmanagedType.LPStr)] public string path;
+        [MarshalAs(UnmanagedType.LPWStr)] public string path;
         [MarshalAs(UnmanagedType.LPStr)] public string name;
-        public Size size;
+        public int width;
+        public int height;
     }
 
     [StructLayout(LayoutKind.Sequential)]
-    private struct Sprite
-    {
-        [MarshalAs(UnmanagedType.LPStr)] public string name;
-        public UVRect uv;
-        public Size size;
-        public int section;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Atlas
-    {
-        public Size maxSize;
-        public int textureCount;
-        public Texture[] textures;
-        public int spriteCount;
-        public Sprite[] sprites;
-
-        public static object MarshalNativeToManaged(IntPtr pNativeData)
-        {
-            Atlas atlas = new Atlas();
-            atlas.maxSize = (Size) Marshal.PtrToStructure(pNativeData, typeof (Size));
-            atlas.textureCount = Marshal.ReadInt32(pNativeData, Marshal.SizeOf(typeof (Size)));
-            atlas.textures = new Texture[atlas.textureCount];
-
-            pNativeData = new IntPtr(pNativeData.ToInt32() + Marshal.SizeOf(typeof(Size)) + Marshal.SizeOf(typeof(int)));
-            for (int i = 0; i < atlas.textureCount; i++)
-            {
-                Texture t = (Texture) Marshal.PtrToStructure(pNativeData, typeof (Texture));
-                atlas.textures[i] = t;
-                pNativeData = new IntPtr(pNativeData.ToInt32() + Marshal.SizeOf(typeof(Texture)));
-            }
-
-            atlas.spriteCount = Marshal.ReadInt32(pNativeData,
-                Marshal.SizeOf(typeof (Size)) + Marshal.SizeOf(typeof (int)) +
-                atlas.textureCount*Marshal.SizeOf(typeof (Texture)));
-
-            pNativeData =
-                new IntPtr(pNativeData.ToInt32() + Marshal.SizeOf(typeof (Size)) + 2*Marshal.SizeOf(typeof (int)) +
-                           atlas.textureCount*Marshal.SizeOf(typeof (Texture)));
-            for (int i = 0; i < atlas.spriteCount; i++)
-            {
-                Sprite s = (Sprite)Marshal.PtrToStructure(pNativeData, typeof(Sprite));
-                atlas.sprites[i] = s;
-                pNativeData = new IntPtr(pNativeData.ToInt32() + Marshal.SizeOf(typeof(Sprite)));
-            }
-
-            return atlas;
-        }
-
-        public static IntPtr MarshalManagedToNative(object managedObj)
-        {
-            Atlas atlas = (Atlas) managedObj;
-            IntPtr ptr = Marshal.AllocCoTaskMem(GetNativeDataSize(atlas));
-            if (IntPtr.Zero == ptr)
-            {
-                throw new Exception("Could not allocate memory");
-            }
-
-            Marshal.StructureToPtr(atlas.maxSize, ptr, false);
-            Marshal.WriteInt32(ptr, Marshal.SizeOf(typeof(Size)), atlas.textureCount);
-            ptr = new IntPtr(ptr.ToInt32() + Marshal.SizeOf(typeof(Size)));
-            for (int i = 0; i < atlas.textureCount; i++)
-            {
-                Marshal.StructureToPtr(atlas.textures[i], ptr, false);
-                ptr = new IntPtr(ptr.ToInt32() + Marshal.SizeOf(typeof(Texture)));
-            }
-            Marshal.WriteInt32(ptr,
-                Marshal.SizeOf(typeof (Size)) + Marshal.SizeOf(typeof (int)) +
-                atlas.textureCount * Marshal.SizeOf(typeof(Texture)), atlas.spriteCount);
-            ptr = new IntPtr(ptr.ToInt32() + Marshal.SizeOf(typeof (Size)) + 2*Marshal.SizeOf(typeof (int)) +
-                                   atlas.textureCount * Marshal.SizeOf(typeof(Texture)));
-            for (int i = 0; i < atlas.spriteCount; i++)
-            {
-                Marshal.StructureToPtr(atlas.sprites[i], ptr, false);
-                ptr = new IntPtr(ptr.ToInt32() + Marshal.SizeOf(typeof(Sprite)));
-            }
-
-            return ptr;
-        }
-
-        static int GetNativeDataSize(Atlas atlas)
-        {
-            int size = Marshal.SizeOf(typeof(Size));
-            size += Marshal.SizeOf(typeof(int))*2;
-            if (atlas.textures != null)
-                size += Marshal.SizeOf(typeof(Texture)) * atlas.textures.Length;
-            if (atlas.sprites != null)
-                size += Marshal.SizeOf(typeof(Sprite)) * atlas.sprites.Length;
-            return size;
-        }
-
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    public struct Color
+    private struct Color
     {
         public byte r;
         public byte g;
@@ -295,6 +209,28 @@ public static class PackerWrapper
         PCX,
         WBMP,
         WMF
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    public struct Options
+    {
+        public bool crop;
+        public Algorithm algorithm;
+    }
+
+    public enum Algorithm
+    {
+        Plain,
+        MaxRects
+    }
+
+    private enum DebugOptions
+    {
+        None = 0,
+        InfoOnly = 1,
+        StopAfterLoad = 2 | 1,
+        StopAfterComputing = 4 | 1,
+        StopAfterPacking = 8 | 1
     }
 
     #endregion
