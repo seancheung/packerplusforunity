@@ -226,7 +226,10 @@ public static class PackerWrapper
         InfoOnly = 1,
         StopAfterLoad = 2 | 1,
         StopAfterComputing = 4 | 1,
-        StopAfterPacking = 8 | 1
+        StopAfterPacking = 8 | 1,
+        StopAfterJson = 16 | 1,
+        SkipJsonT = 32 | 1,
+        SkipJsonS = 64 |1
     }
 
     #endregion

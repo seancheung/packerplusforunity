@@ -12,7 +12,7 @@ public class PackerWindow : ScriptableWizard
     [Range(128, 4096)] [SerializeField] private int height = 1024;
     [SerializeField] private bool crop = true;
     [SerializeField] private PackerWrapper.Algorithm algorithm;
-    [SerializeField] private AtlasPlus atlas;
+    public AtlasPlus atlas;
     [SerializeField] private Texture2D[] textures;
 
     [MenuItem("Window/PackerPlus")]
@@ -58,4 +58,5 @@ public class PackerWindow : ScriptableWizard
         else
             errorString = String.Empty;
     }
+
 }
