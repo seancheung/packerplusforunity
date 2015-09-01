@@ -65,10 +65,8 @@ public static class PackerWrapper
         ColorDepth depth, Format format, Color color);
 
     [DllImport(API, EntryPoint = "pack")]
-    private static extern bool Pack([MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] Texture[] textures,
-        int count, int maxWidth, int maxHeight, [MarshalAs(UnmanagedType.LPWStr)] string path,
-        ColorDepth depth, Format format,
-        [Out, MarshalAs(UnmanagedType.LPStr)] out string json, Options options, DebugOptions debug);
+    private static extern bool Pack([MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] Texture[] textures, int count,
+        Options options, [Out, MarshalAs(UnmanagedType.LPStr)] out string json, DebugOptions debug);
 
     /// <summary>
     /// Create a texture
@@ -90,13 +88,8 @@ public static class PackerWrapper
     /// </summary>
     /// <param name="textures"></param>
     /// <param name="atlas"></param>
-    /// <param name="maxWidth"></param>
-    /// <param name="maxHeight"></param>
-    /// <param name="depth"></param>
-    /// <param name="format"></param>
     /// <param name="options"></param>
-    public static void Pack(Texture2D[] textures, AtlasPlus atlas, int maxWidth, int maxHeight, ColorDepth depth,
-        Format format, Options options)
+    public static void Pack(Texture2D[] textures, AtlasPlus atlas, Options options)
     {
         Texture[] data =
             textures.Select(
@@ -107,14 +100,11 @@ public static class PackerWrapper
                         path = AssetDatabase.GetAssetPath(t)
                     }).ToArray();
         var count = data.Length;
-        var path = AssetDatabase.GetAssetPath(atlas);
-
         string json;
         if (
-            !Pack(data, count, maxWidth, maxHeight, Path.ChangeExtension(path, format.ToString().ToLower()), depth,
-                format, out json, options, DebugOptions.None) || string.IsNullOrEmpty(json))
+            !Pack(data, count, options, out json, DebugOptions.None) || string.IsNullOrEmpty(json))
             return;
-        File.WriteAllText(Path.ChangeExtension(path, "txt"), json);
+        File.WriteAllText(Path.ChangeExtension(options.outputPath, "txt"), json);
         AssetDatabase.Refresh();
 
         var ja = Json.Deserialize(json) as Dictionary<string, object>;
@@ -151,8 +141,8 @@ public static class PackerWrapper
             atlas.sprites[i].uvRect = Rect.MinMaxRect(converter(uv["xMin"]), converter(uv["yMin"]),
                 converter(uv["xMax"]), converter(uv["yMax"]));
         }
-        atlas.maxWidth = maxWidth;
-        atlas.maxHeight = maxHeight;
+        atlas.maxWidth = options.maxWidth;
+        atlas.maxHeight = options.maxHeight;
     }
 #endif
 
@@ -214,6 +204,11 @@ public static class PackerWrapper
     [StructLayout(LayoutKind.Sequential)]
     public struct Options
     {
+        public int maxWidth;
+        public int maxHeight;
+        [MarshalAs(UnmanagedType.LPWStr)] public string outputPath;
+        public ColorDepth colorDepth;
+        public Format format;
         public bool crop;
         public Algorithm algorithm;
     }
@@ -221,7 +216,8 @@ public static class PackerWrapper
     public enum Algorithm
     {
         Plain,
-        MaxRects
+        MaxRects,
+        TightRects
     }
 
     private enum DebugOptions

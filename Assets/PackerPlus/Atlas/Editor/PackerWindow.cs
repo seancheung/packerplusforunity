@@ -1,4 +1,5 @@
 ﻿using System;
+using System.IO;
 using System.Linq;
 using UnityEditor;
 using UnityEngine;
@@ -22,8 +23,18 @@ public class PackerWindow : ScriptableWizard
 
     private void OnWizardCreate()
     {
-        PackerWrapper.Pack(textures, atlas, width, height, depth, format,
-            new PackerWrapper.Options {algorithm = algorithm, crop = crop});
+        PackerWrapper.Options options = new PackerWrapper.Options
+        {
+            colorDepth = depth,
+            maxWidth = width,
+            maxHeight = height,
+            algorithm = algorithm,
+            crop = crop,
+            format = format
+        };
+        var path = AssetDatabase.GetAssetPath(atlas);
+        options.outputPath = Path.ChangeExtension(path, options.format.ToString().ToLower());
+        PackerWrapper.Pack(textures, atlas, options);
         EditorUtility.SetDirty(atlas);
         AssetDatabase.Refresh();
     }
