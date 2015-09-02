@@ -11,6 +11,7 @@ public class PackerWindow : ScriptableWizard
     [Range(128, 4096)] [SerializeField] private int width = 1024;
     [Range(128, 4096)] [SerializeField] private int height = 1024;
     [SerializeField] private bool crop = true;
+    [SerializeField] private bool generateJson;
     [SerializeField] private PackerWrapper.Algorithm algorithm;
     public AtlasPlus atlas;
     [SerializeField] private Texture2D[] textures;
@@ -34,9 +35,8 @@ public class PackerWindow : ScriptableWizard
         };
         var path = AssetDatabase.GetAssetPath(atlas);
         options.outputPath = Path.ChangeExtension(path, options.format.ToString().ToLower());
-        PackerWrapper.Pack(textures, atlas, options);
+        PackerWrapper.Pack(textures, atlas, options, generateJson);
         EditorUtility.SetDirty(atlas);
-        AssetDatabase.Refresh();
     }
 
     private void OnWizardOtherButton()

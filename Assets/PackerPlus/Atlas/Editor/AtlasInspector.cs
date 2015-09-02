@@ -15,6 +15,7 @@ namespace Ultralpha.Editor
         private UndoObject undo;
         private Texture2D import;
         private int selected;
+        private Vector2 scroll;
 
         private void OnEnable()
         {
@@ -146,18 +147,22 @@ namespace Ultralpha.Editor
         private void DrawTexture()
         {
             var textures = serializedObject.FindProperty("textures");
-            GUILayout.BeginHorizontal();
+            scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(100));
             {
-                for (int i = 0; i < textures.arraySize; i++)
+                GUILayout.BeginHorizontal();
                 {
-                    var texture = textures.GetArrayElementAtIndex(i);
-                    var rect = EditorGUILayout.GetControlRect(false, 80, GUILayout.Width(80));
-                    EditorGUI.DrawTextureTransparent(rect,
-                        texture.FindPropertyRelative("texture").objectReferenceValue as Texture,
-                        ScaleMode.ScaleToFit);
+                    for (int i = 0; i < textures.arraySize; i++)
+                    {
+                        var texture = textures.GetArrayElementAtIndex(i);
+                        var rect = EditorGUILayout.GetControlRect(false, 80, GUILayout.Width(80));
+                        EditorGUI.DrawTextureTransparent(rect,
+                            texture.FindPropertyRelative("texture").objectReferenceValue as Texture,
+                            ScaleMode.ScaleToFit);
+                    }
                 }
+                GUILayout.EndHorizontal();
             }
-            GUILayout.EndHorizontal();
+            GUILayout.EndScrollView();
             EditorGUILayout.Separator();
         }
 
@@ -227,7 +232,8 @@ namespace Ultralpha.Editor
                 {
                     using (undo.CheckChange())
                     {
-                        var newName = EditorGUILayout.TextField("Sprite Name", sprite.FindPropertyRelative("name").stringValue,
+                        var newName = EditorGUILayout.TextField("Sprite Name",
+                            sprite.FindPropertyRelative("name").stringValue,
                             GUILayout.ExpandWidth(true));
                         if (undo.TryRecord("Set sprite name"))
                         {
@@ -306,7 +312,8 @@ namespace Ultralpha.Editor
         {
             if (GUILayout.Button("Pack"))
             {
-                EditorWindow.GetWindow<PackerWindow>().atlas = serializedObject.targetObject as AtlasPlus;
+                ScriptableWizard.DisplayWizard<PackerWindow>("Packer", "Repack").atlas =
+                    serializedObject.targetObject as AtlasPlus;
             }
         }
 

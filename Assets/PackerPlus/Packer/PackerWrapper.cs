@@ -47,8 +47,7 @@ public static class PackerWrapper
     private static extern void LinkDebug(
         [MarshalAs(UnmanagedType.FunctionPtr)] IntPtr logCal,
         [MarshalAs(UnmanagedType.FunctionPtr)] IntPtr errorCal,
-        [MarshalAs(UnmanagedType.FunctionPtr)] IntPtr warningCal,
-        [MarshalAs(UnmanagedType.I1)] bool logResult);
+        [MarshalAs(UnmanagedType.FunctionPtr)] IntPtr warningCal, bool logResult);
 
     private static readonly Debug log = content => UnityEngine.Debug.Log(content);
     private static readonly Debug error = content => UnityEngine.Debug.LogError(content);
@@ -60,27 +59,9 @@ public static class PackerWrapper
 
     #endregion
 
-    [DllImport(API, EntryPoint = "create_empty")]
-    private static extern void CreateEmpty(int width, int height, [MarshalAs(UnmanagedType.LPWStr)] string path,
-        ColorDepth depth, Format format, Color color);
-
     [DllImport(API, EntryPoint = "pack")]
     private static extern bool Pack([MarshalAs(UnmanagedType.LPArray, SizeParamIndex = 1)] Texture[] textures, int count,
         Options options, [Out, MarshalAs(UnmanagedType.LPStr)] out string json, DebugOptions debug);
-
-    /// <summary>
-    /// Create a texture
-    /// </summary>
-    /// <param name="width"></param>
-    /// <param name="height"></param>
-    /// <param name="path"></param>
-    /// <param name="depth"></param>
-    /// <param name="format"></param>
-    /// <param name="color"></param>
-    public static void Create(int width, int height, string path, ColorDepth depth, Format format, Color32 color)
-    {
-        CreateEmpty(width, height, path, depth, format, color);
-    }
 
 #if UNITY_EDITOR
     /// <summary>
@@ -89,24 +70,27 @@ public static class PackerWrapper
     /// <param name="textures"></param>
     /// <param name="atlas"></param>
     /// <param name="options"></param>
-    public static void Pack(Texture2D[] textures, AtlasPlus atlas, Options options)
+    /// <param name="generateJson"></param>
+    public static void Pack(Texture2D[] textures, AtlasPlus atlas, Options options, bool generateJson)
     {
-        Texture[] data =
-            textures.Select(
+        Texture[] data = textures == null
+            ? null
+            : textures.Select(
                 t =>
                     new Texture
                     {
                         name = t.name,
                         path = AssetDatabase.GetAssetPath(t)
                     }).ToArray();
-        var count = data.Length;
+        var count = data == null ? 0 : data.Length;
         string json;
         if (
             !Pack(data, count, options, out json, DebugOptions.None) || string.IsNullOrEmpty(json))
             return;
-        File.WriteAllText(Path.ChangeExtension(options.outputPath, "txt"), json);
+        if (generateJson)
+            File.WriteAllText(Path.ChangeExtension(options.outputPath, "json"), json);
         AssetDatabase.Refresh();
-
+        
         var ja = Json.Deserialize(json) as Dictionary<string, object>;
         if (ja == null)
             return;
@@ -155,28 +139,6 @@ public static class PackerWrapper
         [MarshalAs(UnmanagedType.LPStr)] public string name;
         public int width;
         public int height;
-    }
-
-    [StructLayout(LayoutKind.Sequential)]
-    private struct Color
-    {
-        public byte r;
-        public byte g;
-        public byte b;
-        public byte a;
-
-        public Color(byte r, byte g, byte b, byte a)
-        {
-            this.r = r;
-            this.g = g;
-            this.b = b;
-            this.a = a;
-        }
-
-        public static implicit operator Color(Color32 color)
-        {
-            return new Color(color.r, color.g, color.b, color.a);
-        }
     }
 
     public enum ColorDepth
@@ -229,7 +191,7 @@ public static class PackerWrapper
         StopAfterPacking = 8 | 1,
         StopAfterJson = 16 | 1,
         SkipJsonT = 32 | 1,
-        SkipJsonS = 64 |1
+        SkipJsonS = 64 | 1
     }
 
     #endregion
