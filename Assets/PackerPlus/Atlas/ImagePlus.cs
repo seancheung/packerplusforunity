@@ -1,15 +1,40 @@
 ﻿using UnityEngine;
-using System.Collections;
+using UnityEngine.UI;
 
-public class ImagePlus : MonoBehaviour {
+namespace Ultralpha
+{
+    [AddComponentMenu("UI/Image Plus", 0)]
+    public class ImagePlus : Image
+    {
+        [SerializeField] private AtlasPlus _atlas;
+        [SerializeField] private string _spriteName;
 
-	// Use this for initialization
-	void Start () {
-	
-	}
-	
-	// Update is called once per frame
-	void Update () {
-	
-	}
+        public AtlasPlus Atlas
+        {
+            get { return _atlas; }
+            set
+            {
+                _atlas = value;
+                RefreshSprite();
+            }
+        }
+
+        public string SpriteName
+        {
+            get { return _spriteName; }
+            set
+            {
+                if (_spriteName == value)
+                    return;
+                _spriteName = value;
+                RefreshSprite();
+            }
+        }
+
+
+        private void RefreshSprite()
+        {
+            sprite = _atlas ? _atlas[_spriteName] : null;
+        }
+    }
 }

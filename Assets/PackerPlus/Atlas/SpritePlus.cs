@@ -1,15 +1,8 @@
 ﻿using UnityEngine;
-using System.Collections;
 
-public class SpritePlus : MonoBehaviour {
-
-	// Use this for initialization
-	void Start () {
-	
-	}
-	
-	// Update is called once per frame
-	void Update () {
-	
-	}
+namespace Ultralpha
+{
+    public class SpritePlus : MonoBehaviour
+    {
+    }
 }

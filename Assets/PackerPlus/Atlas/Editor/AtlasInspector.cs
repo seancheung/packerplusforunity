@@ -22,7 +22,7 @@ namespace Ultralpha.Editor
             undo = new UndoObject(serializedObject.targetObject);
         }
 
-        [MenuItem(("Assets/Create/Atlas"))]
+        [MenuItem(("Assets/Create/Atlas Plus"))]
         private static void CreateAtlas()
         {
             AtlasPlus atlas = CreateInstance<AtlasPlus>();
@@ -147,22 +147,25 @@ namespace Ultralpha.Editor
         private void DrawTexture()
         {
             var textures = serializedObject.FindProperty("textures");
-            scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(100));
+            if (textures.arraySize > 0)
             {
-                GUILayout.BeginHorizontal();
+                scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(85));
                 {
-                    for (int i = 0; i < textures.arraySize; i++)
+                    GUILayout.BeginHorizontal();
                     {
-                        var texture = textures.GetArrayElementAtIndex(i);
-                        var rect = EditorGUILayout.GetControlRect(false, 80, GUILayout.Width(80));
-                        EditorGUI.DrawTextureTransparent(rect,
-                            texture.FindPropertyRelative("texture").objectReferenceValue as Texture,
-                            ScaleMode.ScaleToFit);
+                        for (int i = 0; i < textures.arraySize; i++)
+                        {
+                            var texture = textures.GetArrayElementAtIndex(i);
+                            var rect = EditorGUILayout.GetControlRect(false, 80, GUILayout.Width(80));
+                            EditorGUI.DrawTextureTransparent(rect,
+                                texture.FindPropertyRelative("texture").objectReferenceValue as Texture,
+                                ScaleMode.ScaleToFit);
+                        }
                     }
+                    GUILayout.EndHorizontal();
                 }
-                GUILayout.EndHorizontal();
+                GUILayout.EndScrollView();
             }
-            GUILayout.EndScrollView();
             EditorGUILayout.Separator();
         }
 
@@ -292,7 +295,7 @@ namespace Ultralpha.Editor
                 GUILayout.EndHorizontal();
 
                 GUILayout.Space(2);
-                EditorGUILayout.PropertyField(sprite.FindPropertyRelative("padding"));
+                EditorGUILayout.Vector4Field("padding", sprite.FindPropertyRelative("padding").vector4Value);
             }
             GUILayout.EndVertical();
         }
