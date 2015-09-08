@@ -12,14 +12,39 @@ namespace Ultralpha.Editor
     [CustomEditor((typeof (AtlasPlus)))]
     public class AtlasInspector : UnityEditor.Editor
     {
-        private UndoObject undo;
-        private Texture2D import;
-        private int selected;
-        private Vector2 scroll;
+        private UndoObject _undo;
+        private Texture2D _import;
+        private int _selected;
+        private Vector2 _hscroll;
+        private Vector2 _vscroll;
+        private SerializedProperty _previewTexture;
+        private SerializedProperty _previewSprite;
+        private static Texture2D _borderTexture;
+        private static Texture2D _backgroundTexture;
+
+        private static Texture2D BorderTexture
+        {
+            get
+            {
+                return _borderTexture ?? (_borderTexture = CreateCheckerTex(
+                    new Color(0f, 0.0f, 0f, 0.5f),
+                    new Color(1f, 1f, 1f, 0.5f)));
+            }
+        }
+
+        private static Texture2D BackgroundTexture
+        {
+            get
+            {
+                return _backgroundTexture ?? (_backgroundTexture = CreateCheckerTex(
+                    new Color(0f, 0.0f, 0f, 0.1f),
+                    new Color(1f, 1f, 1f, 0.1f)));
+            }
+        }
 
         private void OnEnable()
         {
-            undo = new UndoObject(serializedObject.targetObject);
+            _undo = new UndoObject(serializedObject.targetObject);
         }
 
         [MenuItem(("Assets/Create/Atlas Plus"))]
@@ -70,9 +95,9 @@ namespace Ultralpha.Editor
 
         private void DrawImporter()
         {
-            import = EditorGUILayout.ObjectField(import, typeof (Texture2D), false) as Texture2D;
+            _import = EditorGUILayout.ObjectField(_import, typeof (Texture2D), false) as Texture2D;
 
-            if (import == null)
+            if (_import == null)
             {
                 EditorGUILayout.HelpBox("Texture should be added first", MessageType.Info);
                 return;
@@ -124,7 +149,7 @@ namespace Ultralpha.Editor
                 textures.ClearArray();
                 textures.InsertArrayElementAtIndex(0);
                 var texture = textures.GetArrayElementAtIndex(0);
-                texture.FindPropertyRelative("texture").objectReferenceValue = import;
+                texture.FindPropertyRelative("texture").objectReferenceValue = _import;
                 texture.FindPropertyRelative("width").intValue = (int) width;
                 texture.FindPropertyRelative("height").intValue = (int) height;
                 var sps = serializedObject.FindProperty("sprites");
@@ -140,7 +165,7 @@ namespace Ultralpha.Editor
                 }
                 EditorUtility.SetDirty(serializedObject.targetObject);
                 Debug.Log("Imported " + sprites.Count + " sprite(s)");
-                undo.Clear();
+                _undo.Clear();
             }
         }
 
@@ -149,7 +174,7 @@ namespace Ultralpha.Editor
             var textures = serializedObject.FindProperty("textures");
             if (textures.arraySize > 0)
             {
-                scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(85));
+                _hscroll = GUILayout.BeginScrollView(_hscroll, GUILayout.Height(85));
                 {
                     GUILayout.BeginHorizontal();
                     {
@@ -179,68 +204,47 @@ namespace Ultralpha.Editor
             {
                 names[i] = sprites.GetArrayElementAtIndex(i).FindPropertyRelative("name").stringValue;
             }
-            selected = GUILayout.SelectionGrid(selected, names, 2);
 
-            var sprite = sprites.GetArrayElementAtIndex(selected);
+            GUILayout.BeginVertical(GUI.skin.box);
+            {
+                GUILayout.Space(2);
+                _vscroll = GUILayout.BeginScrollView(_vscroll);
+                {
+                    _selected = GUILayout.SelectionGrid(_selected, names, 2);
+                }
+                GUILayout.EndScrollView();
+                GUILayout.Space(2);
+            }
+            GUILayout.EndVertical();
+            GUILayout.Space(4);
+
+            _previewSprite = sprites.GetArrayElementAtIndex(_selected);
             var textures = serializedObject.FindProperty("textures");
-            int section = sprite.FindPropertyRelative("section").intValue;
+            int section = _previewSprite.FindPropertyRelative("section").intValue;
             if (textures.arraySize <= section ||
                 !textures.GetArrayElementAtIndex(section).FindPropertyRelative("texture").objectReferenceValue)
             {
                 EditorGUILayout.HelpBox("Texture Missing!", MessageType.Error);
+                _previewTexture = null;
                 return;
             }
-            var texture = textures.GetArrayElementAtIndex(section);
-            var width = sprite.FindPropertyRelative("sourceRect").rectValue.width;
-            var height = sprite.FindPropertyRelative("sourceRect").rectValue.height;
-            Rect rect = EditorGUILayout.GetControlRect(false, height);
-            if (rect.width > width)
-            {
-                rect.x = rect.width/2 - width/2f;
-                rect.width = width;
-            }
-            else
-            {
-                rect.height = rect.width/width*height;
-            }
-
-            GUI.DrawTextureWithTexCoords(rect, texture.FindPropertyRelative("texture").objectReferenceValue as Texture2D,
-                sprite.FindPropertyRelative("uvRect").rectValue);
-            EditorGUILayout.Separator();
+            _previewTexture = textures.GetArrayElementAtIndex(section);
 
             //draw border preview
-            var border = sprite.FindPropertyRelative("border").vector4Value;
-            Handles.color = new Color32(124, 244, 255, 255);
-            //top
-            if (border.w > 0)
-                Handles.DrawLine(new Vector3(rect.xMin, rect.yMin + border.w),
-                    new Vector3(rect.xMax, rect.yMin + border.w));
-            //left
-            if (border.x > 0)
-                Handles.DrawLine(new Vector3(rect.xMin + border.x, rect.yMin),
-                    new Vector3(rect.xMin + border.x, rect.yMax));
-            //bottom
-            if (border.y > 0)
-                Handles.DrawLine(new Vector3(rect.xMin, rect.yMax - border.y),
-                    new Vector3(rect.xMax, rect.yMax - border.y));
-            //right
-            if (border.z > 0)
-                Handles.DrawLine(new Vector3(rect.xMax - border.z, rect.yMin),
-                    new Vector3(rect.xMax - border.z, rect.yMax));
-            GUILayout.Space(2);
+            var border = _previewSprite.FindPropertyRelative("border").vector4Value;
 
             GUILayout.BeginVertical(GUI.skin.box);
             {
                 GUILayout.BeginHorizontal();
                 {
-                    using (undo.CheckChange())
+                    using (_undo.CheckChange())
                     {
                         var newName = EditorGUILayout.TextField("Sprite Name",
-                            sprite.FindPropertyRelative("name").stringValue,
+                            _previewSprite.FindPropertyRelative("name").stringValue,
                             GUILayout.ExpandWidth(true));
-                        if (undo.TryRecord("Set sprite name"))
+                        if (_undo.TryRecord("Set sprite name"))
                         {
-                            sprite.FindPropertyRelative("name").stringValue = UniqueName(newName, names);
+                            _previewSprite.FindPropertyRelative("name").stringValue = UniqueName(newName, names);
                         }
                     }
                     EditorGUI.BeginChangeCheck();
@@ -249,11 +253,12 @@ namespace Ultralpha.Editor
                         //RemoveSprite(sprite);
                     }
                 }
-                ;
                 GUILayout.EndHorizontal();
-                using (undo.CheckChange())
+                GUILayout.Space(4);
+
+                using (_undo.CheckChange())
                 {
-                    var sourceRect = sprite.FindPropertyRelative("sourceRect").rectValue;
+                    var sourceRect = _previewSprite.FindPropertyRelative("sourceRect").rectValue;
                     var x = EditorGUILayout.IntSlider("Left", (int) border.x, 0,
                         (int) sourceRect.width);
                     var z = EditorGUILayout.IntSlider("Right", (int) border.z, 0,
@@ -262,9 +267,9 @@ namespace Ultralpha.Editor
                         (int) sourceRect.height);
                     var y = EditorGUILayout.IntSlider("Bottom", (int) border.y, 0,
                         (int) sourceRect.height);
-                    if (undo.TryRecord("Set sprite border"))
+                    if (_undo.TryRecord("Set sprite border"))
                     {
-                        sprite.FindPropertyRelative("border").vector4Value = new Vector4(x, y, z, w);
+                        _previewSprite.FindPropertyRelative("border").vector4Value = new Vector4(x, y, z, w);
                     }
                 }
 
@@ -274,7 +279,7 @@ namespace Ultralpha.Editor
                     if (GUILayout.Button("Copy", EditorStyles.miniButtonLeft))
                     {
                         EditorGUIUtility.systemCopyBuffer =
-                            sprite.FindPropertyRelative("border").vector4Value.ToString();
+                            _previewSprite.FindPropertyRelative("border").vector4Value.ToString();
                     }
                     if (GUILayout.Button("Paste", EditorStyles.miniButtonRight))
                     {
@@ -283,9 +288,9 @@ namespace Ultralpha.Editor
                                 @"^\(\d+\.0,\s*\d+\.0,\s*\d+\.0,\s*\d+\.0\)$"))
                         {
                             string[] data = EditorGUIUtility.systemCopyBuffer.Trim('(', ')').Split(',');
-                            using (undo.Record("Paste sprite border"))
+                            using (_undo.Record("Paste sprite border"))
                             {
-                                sprite.FindPropertyRelative("border").vector4Value =
+                                _previewSprite.FindPropertyRelative("border").vector4Value =
                                     new Vector4(float.Parse(data[0].Trim()), float.Parse(data[1].Trim()),
                                         float.Parse(data[2].Trim()), float.Parse(data[3].Trim()));
                             }
@@ -295,9 +300,79 @@ namespace Ultralpha.Editor
                 GUILayout.EndHorizontal();
 
                 GUILayout.Space(2);
-                EditorGUILayout.Vector4Field("padding", sprite.FindPropertyRelative("padding").vector4Value);
+                EditorGUILayout.Vector2Field("Pivot", _previewSprite.FindPropertyRelative("pivot").vector2Value);
+
+                GUILayout.Space(2);
+                EditorGUILayout.Vector4Field("Padding", _previewSprite.FindPropertyRelative("padding").vector4Value);
             }
             GUILayout.EndVertical();
+        }
+
+        public override void DrawPreview(Rect rect)
+        {
+            var center = rect.center;
+            var width = _previewSprite.FindPropertyRelative("sourceRect").rectValue.width;
+            var height = _previewSprite.FindPropertyRelative("sourceRect").rectValue.height;
+            var w = width/rect.width;
+            var h = height/rect.height;
+            if (w < h)
+            {
+                rect.width = width/height*rect.height;
+            }
+            else if (w > h)
+            {
+                rect.height = height/width*rect.width;
+            }
+            rect.width = Mathf.Min(rect.width, width);
+            rect.height = Mathf.Min(rect.height, height);
+            rect.center = center;
+
+            rect.x = Mathf.RoundToInt(rect.x);
+            rect.y = Mathf.RoundToInt(rect.y);
+            rect.width = Mathf.RoundToInt(rect.width);
+            rect.height = Mathf.RoundToInt(rect.height);
+
+            //bg
+            DrawTiledTexture(rect, BackgroundTexture);
+
+            //texture
+            GUI.DrawTextureWithTexCoords(rect,
+                _previewTexture.FindPropertyRelative("texture").objectReferenceValue as Texture2D,
+                _previewSprite.FindPropertyRelative("uvRect").rectValue);
+
+            //draw border preview
+            var border = _previewSprite.FindPropertyRelative("border").vector4Value;
+            //top
+            if (border.w > 0)
+                DrawTiledTexture(new Rect(rect.xMin, rect.yMin + border.w, rect.width, 1), BorderTexture);
+            //left
+            if (border.x > 0)
+                DrawTiledTexture(new Rect(rect.xMin + border.x, rect.yMin, 1, rect.height), BorderTexture);
+            //bottom
+            if (border.y > 0)
+                DrawTiledTexture(new Rect(rect.xMin, rect.yMax - border.y, rect.width, 1), BorderTexture);
+            //right
+            if (border.z > 0)
+                DrawTiledTexture(new Rect(rect.xMax - border.z, rect.yMin, 1, rect.height), BorderTexture);
+
+            //outline
+            Handles.color = Color.black;
+            Handles.DrawPolyLine(new Vector3(rect.xMin, rect.yMin), new Vector3(rect.xMax, rect.yMin),
+                new Vector3(rect.xMax, rect.yMax), new Vector3(rect.xMin, rect.yMax), new Vector3(rect.xMin, rect.yMin));
+
+            //info
+            var source = _previewSprite.FindPropertyRelative("sourceRect").rectValue;
+            EditorGUI.DropShadowLabel(EditorGUILayout.GetControlRect(), "Source: " + source);
+        }
+
+        public override bool HasPreviewGUI()
+        {
+            return _previewSprite != null && _previewTexture != null;
+        }
+
+        public override GUIContent GetPreviewTitle()
+        {
+            return new GUIContent(_previewSprite.FindPropertyRelative("name").stringValue);
         }
 
         private static string UniqueName(string original, string[] names)
@@ -318,6 +393,40 @@ namespace Ultralpha.Editor
                 ScriptableWizard.DisplayWizard<PackerWindow>("Packer", "Repack").atlas =
                     serializedObject.targetObject as AtlasPlus;
             }
+        }
+
+        private static Texture2D CreateCheckerTex(Color c0, Color c1)
+        {
+            Texture2D tex = new Texture2D(16, 16);
+            tex.name = "[Generated] Checker Texture";
+            tex.hideFlags = HideFlags.DontSave;
+
+            for (int y = 0; y < 8; ++y) for (int x = 0; x < 8; ++x) tex.SetPixel(x, y, c1);
+            for (int y = 8; y < 16; ++y) for (int x = 0; x < 8; ++x) tex.SetPixel(x, y, c0);
+            for (int y = 0; y < 8; ++y) for (int x = 8; x < 16; ++x) tex.SetPixel(x, y, c0);
+            for (int y = 8; y < 16; ++y) for (int x = 8; x < 16; ++x) tex.SetPixel(x, y, c1);
+
+            tex.Apply();
+            tex.filterMode = FilterMode.Point;
+            return tex;
+        }
+
+        private static void DrawTiledTexture(Rect rect, Texture tex)
+        {
+            GUI.BeginGroup(rect);
+            {
+                int width = Mathf.RoundToInt(rect.width);
+                int height = Mathf.RoundToInt(rect.height);
+
+                for (int y = 0; y < height; y += tex.height)
+                {
+                    for (int x = 0; x < width; x += tex.width)
+                    {
+                        GUI.DrawTexture(new Rect(x, y, tex.width, tex.height), tex);
+                    }
+                }
+            }
+            GUI.EndGroup();
         }
 
         private enum Mode
