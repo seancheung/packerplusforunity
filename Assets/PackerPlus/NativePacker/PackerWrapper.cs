@@ -44,6 +44,7 @@ namespace Ultralpha
         [UnmanagedFunctionPointer(CallingConvention.StdCall)]
         private delegate void Debug(string content);
 
+        [AllowReversePInvokeCalls]
         [DllImport(API, EntryPoint = "link_debug")]
         private static extern void LinkDebug(
             [MarshalAs(UnmanagedType.FunctionPtr)] IntPtr logCal,
@@ -131,6 +132,72 @@ namespace Ultralpha
             atlas.maxHeight = options.maxHeight;
         }
 #endif
+
+        /// <summary>
+        /// Dynamically create atlas
+        /// </summary>
+        /// <param name="textures">Paths that can be accessed on all platforms at runtime</param>
+        /// <param name="options"></param>
+        /// <returns></returns>
+        //TODO: load at path
+        public static AtlasPlus Create(string[] textures, Options options)
+        {
+            Texture[] input = textures == null
+                ? null
+                : textures.Select(t => new Texture
+                {
+                    path = t,
+                    name = Path.GetFileNameWithoutExtension(t)
+                }).ToArray();
+
+            var count = input == null ? 0 : input.Length;
+            string json;
+            if (
+                !Pack(input, count, options, out json, DebugOptions.None) || string.IsNullOrEmpty(json))
+                return null;
+
+            AtlasPlus atlas = ScriptableObject.CreateInstance<AtlasPlus>();
+            var ja = Json.Deserialize(json) as Dictionary<string, object>;
+            if (ja == null)
+                return null;
+            var ta = ja["textures"] as List<object>;
+            var sa = ja["sprites"] as List<object>;
+            if (ta == null || sa == null)
+                return null;
+            atlas.textures = new TextureInfo[ta.Count];
+            string[] paths = new string[ta.Count];
+            for (int i = 0; i < ta.Count; i++)
+            {
+                Dictionary<string, object> t = (Dictionary<string, object>)ta[i];
+                atlas.textures[i] = new TextureInfo();
+                atlas.textures[i].width = (int)(long)t["width"];
+                atlas.textures[i].height = (int)(long)t["height"];
+                //atlas.textures[i].texture = Resources.Load<Texture2D>((string) t["path"]);
+                paths[i] = "file://" + (string) t["path"];
+                if (atlas.textures[i].texture)
+                    atlas.textures[i].texture.name = (string)t["name"];
+            }
+            atlas.sprites = new SpriteInfo[sa.Count];
+            for (int i = 0; i < sa.Count; i++)
+            {
+                Dictionary<string, object> s = (Dictionary<string, object>)sa[i];
+                atlas.sprites[i] = new SpriteInfo();
+                atlas.sprites[i].name = (string)s["name"];
+                atlas.sprites[i].section = (int)(long)s["section"];
+                var rect = (Dictionary<string, object>)s["rect"];
+                var uv = (Dictionary<string, object>)s["uv"];
+                atlas.sprites[i].sourceRect = Rect.MinMaxRect((int)(long)rect["xMin"], (int)(long)rect["yMin"],
+                    (int)(long)rect["xMax"], (int)(long)rect["yMax"]);
+                Converter<object, float> converter =
+                    obj => (float)TypeDescriptor.GetConverter(input.GetType()).ConvertTo(input, typeof(float));
+                atlas.sprites[i].uvRect = Rect.MinMaxRect(converter(uv["xMin"]), converter(uv["yMin"]),
+                    converter(uv["xMax"]), converter(uv["yMax"]));
+            }
+            atlas.maxWidth = options.maxWidth;
+            atlas.maxHeight = options.maxHeight;
+
+            return atlas;
+        }
 
         #region Marshal
 

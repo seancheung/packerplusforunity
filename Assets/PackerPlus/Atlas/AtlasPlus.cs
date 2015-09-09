@@ -21,7 +21,7 @@ namespace Ultralpha
         {
             get
             {
-                if (index >= sprites.Length || index < 0)
+                if (sprites == null || index >= sprites.Length || index < 0)
                     return null;
                 var sprite = sprites[index];
                 var texture = sprite == null || textures == null || sprite.section > textures.Length ||
@@ -40,7 +40,7 @@ namespace Ultralpha
         {
             get
             {
-                if (sprites.Length == 0)
+                if (sprites == null || sprites.Length == 0)
                     return null;
                 var sprite = sprites.FirstOrDefault(s => s.name == key);
                 var texture = sprite == null || textures == null || sprite.section > textures.Length ||

@@ -8,7 +8,7 @@ namespace Ultralpha.Editor
 {
     [CustomEditor(typeof (ImagePlus))]
     [CanEditMultipleObjects]
-    public class ImageInspector : ImageEditor
+    public class ImagePlusInspector : ImageEditor
     {
         private SerializedProperty _atlas;
         private SerializedProperty _spriteName;
@@ -19,7 +19,7 @@ namespace Ultralpha.Editor
         [MenuItem("GameObject/UI/Image Plus #&a")]
         private static void Create()
         {
-            var image = new GameObject("Image Plus", typeof(ImagePlus));
+            var image = new GameObject("Image Plus", typeof (ImagePlus));
             if (Selection.activeGameObject)
             {
                 GameObjectUtility.SetParentAndAlign(image, Selection.activeGameObject);
@@ -77,7 +77,8 @@ namespace Ultralpha.Editor
             }
             EditorGUILayout.EndFadeGroup();
             serializedObject.ApplyModifiedProperties();
-            base.OnInspectorGUI();
+            if (_atlas.objectReferenceValue)
+                base.OnInspectorGUI();
         }
 
         private void RefreshSprite()
@@ -96,5 +97,4 @@ namespace Ultralpha.Editor
             showSpriteList.valueChanged.RemoveListener(Repaint);
         }
     }
-
 }
