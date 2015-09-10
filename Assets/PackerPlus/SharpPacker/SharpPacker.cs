@@ -24,17 +24,18 @@ namespace Ultralpha
                 return null;
             }
 
-            int index = textures.Length - 1;
-            textures = textures.Reverse().ToArray();
-            AtlasPlus atlas = ScriptableObject.CreateInstance<AtlasPlus>();
+            var index = textures.Length - 1;
+            //textures = textures.Reverse().ToArray();
+            textures = textures.OrderBy(t => t.width*t.height).ToArray();
+            var atlas = ScriptableObject.CreateInstance<AtlasPlus>();
             atlas.maxWidth = width;
             atlas.maxHeight = height;
-            List<TextureTree> nodes = new List<TextureTree>();
+            var nodes = new List<TextureTree>();
 
             while (index >= 0)
             {
                 nodes.Add(new TextureTree(new Rect(0, 0, width, height)));
-                int addIndex = 0;
+                var addIndex = 0;
                 while (index >= 0)
                 {
                     textures[index].name = UniqueName(textures[index].name,
@@ -48,22 +49,28 @@ namespace Ultralpha
                 }
             }
 
-            List<SpriteInfo> sprites = new List<SpriteInfo>();
+            var sprites = new List<SpriteInfo>();
             atlas.sprites = sprites.ToArray();
             atlas.textures = new TextureInfo[nodes.Count];
 
-            for (int i = 0; i < nodes.Count; i++)
+            for (var i = 0; i < nodes.Count; i++)
             {
                 var node = nodes[i];
+                var size = node.GetRootSize();
+                node.rect.width = size.x;
+                node.rect.height = size.y;
                 atlas.textures[i] = new TextureInfo();
-                atlas.textures[i].texture = new Texture2D(width, height, TextureFormat.ARGB32, false);
-                atlas.textures[i].texture.SetPixels32(Enumerable.Repeat(new Color32(0, 0, 0, 0), width*height).ToArray());
+                atlas.textures[i].texture = new Texture2D((int) node.rect.width, (int) node.rect.height,
+                    TextureFormat.ARGB32, false);
+                atlas.textures[i].texture.SetPixels32(
+                    Enumerable.Repeat(new Color32(0, 0, 0, 0),
+                        atlas.textures[i].texture.width*atlas.textures[i].texture.height).ToArray());
                 node.Build(atlas.textures[i].texture);
                 var bounds = node.GetBounds().OrderBy(n => n.index).ToArray();
 
                 foreach (var bound in bounds)
                 {
-                    Rect uv = new Rect(bound.rect.xMin/node.rect.width, bound.rect.yMin/node.rect.height,
+                    var uv = new Rect(bound.rect.xMin/node.rect.width, bound.rect.yMin/node.rect.height,
                         bound.rect.width/node.rect.width, bound.rect.height/node.rect.height);
                     //maybe add uv boundary padding
                     sprites.Add(new SpriteInfo
@@ -75,8 +82,8 @@ namespace Ultralpha
                     });
                 }
                 atlas.textures[i].texture.Apply(false, !readable);
-                atlas.textures[i].width = width;
-                atlas.textures[i].height = height;
+                atlas.textures[i].width = (int) node.rect.width;
+                atlas.textures[i].height = (int) node.rect.height;
             }
 
             atlas.sprites = sprites.ToArray();
@@ -85,8 +92,8 @@ namespace Ultralpha
 
         private static string UniqueName(string original, string[] names)
         {
-            int suffix = 1;
-            string uniqueName = original;
+            var suffix = 1;
+            var uniqueName = original;
             while (names.Contains(uniqueName))
             {
                 uniqueName = original + "_" + suffix++;

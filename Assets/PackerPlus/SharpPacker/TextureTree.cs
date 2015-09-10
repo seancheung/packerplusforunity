@@ -7,12 +7,10 @@ namespace Ultralpha
     public class TextureTree : RBTree<TextureTree>
     {
         public static int padding = 2;
-        public static bool bleed;
+        public int index;
+        public string name;
         public Rect rect;
         public Texture2D texture;
-        private bool _filled;
-        public string name;
-        public int index;
 
         public TextureTree(Rect rect)
         {
@@ -29,14 +27,13 @@ namespace Ultralpha
                 return null;
             if (HasChildren)
                 return Left.AddTexture(texture, index) ?? Right.AddTexture(texture, index);
-            if (_filled)
+            if (this.texture)
                 return null;
             if (rect.width < texture.width || rect.height < texture.height)
                 return null;
             if (rect.width == texture.width && rect.height == texture.height)
             {
                 this.texture = texture;
-                _filled = true;
                 this.index = index;
                 name = texture.name;
                 return this;
@@ -44,8 +41,8 @@ namespace Ultralpha
 
             InitChildren();
 
-            float deltaW = rect.width - texture.width;
-            float deltaH = rect.height - texture.height;
+            var deltaW = rect.width - texture.width;
+            var deltaH = rect.height - texture.height;
             if (deltaW > deltaH)
             {
                 Left.rect = new Rect(rect.xMin, rect.yMin, texture.width, rect.height);
@@ -65,12 +62,21 @@ namespace Ultralpha
 
         public IEnumerable<TextureTree> GetBounds()
         {
-            return GetChildren().Where(n => n._filled);
+            return GetChildren().Where(n => n.texture);
         }
 
         public IEnumerable<string> GetNames()
         {
-            return GetChildren().Where(n => n._filled).Select(n => n.name);
+            return GetBounds().Select(n => n.name);
+        }
+
+        public Vector2 GetRootSize()
+        {
+            var root = GetRoot();
+            var bounds = root.GetBounds().ToArray();
+            var width= bounds.Max(b => b.rect.xMax) - bounds.Min(b => b.rect.xMin);
+            var height= bounds.Max(b => b.rect.yMax) - bounds.Min(b => b.rect.yMin);
+            return new Vector2(width, height);
         }
 
         public void Build(Texture2D target)
@@ -82,34 +88,16 @@ namespace Ultralpha
             }
             if (texture)
             {
-                if (target.format == TextureFormat.ARGB32 && texture.format == TextureFormat.ARGB32) //faster only on argb32
+                if (target.format == TextureFormat.ARGB32 && texture.format == TextureFormat.ARGB32)
+                    //faster only on argb32
                 {
                     var data = texture.GetPixels32(0);
-                    target.SetPixels32((int)rect.x, (int)rect.y, texture.width, texture.height, data);
+                    target.SetPixels32((int) rect.x, (int) rect.y, texture.width, texture.height, data);
                 }
                 else
                 {
                     var data = texture.GetPixels(0);
-                    for (int x = 0; x < texture.width; x++)
-                    {
-                        for (int y = 0; y < texture.height; y++)
-                        {
-                            target.SetPixel(x + (int)rect.x, y + (int)rect.y, data[x + y * texture.width]);
-                        }
-                    }
-                    if (bleed && padding > 0)
-                    {
-                        for (int y = 0; y < texture.height; y++)
-                        {
-                            int x = texture.width - 1;
-                            target.SetPixel(x + (int)rect.x + padding, y + (int)rect.y, data[x + y * texture.width]);
-                        }
-                        for (int x = 0; x < texture.width; x++)
-                        {
-                            int y = texture.height - 1;
-                            target.SetPixel(x + (int)rect.x, y + (int)rect.y + padding, data[x + y * texture.width]);
-                        }
-                    }
+                    target.SetPixels((int) rect.x, (int) rect.y, texture.width, texture.height, data);
                 }
             }
         }
